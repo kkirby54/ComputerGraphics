@@ -15,8 +15,10 @@
 #include <arcball.h>
 #include <Model.h>
 #include <cube.h>
-#include "link.h"
 #include <keyframe.h>
+#include <text.h>
+#include <plane.h>
+#include "link_m.h"
 //#define STB_IMAGE_IMPLEMENTATION
 //#include <stb_image.h>
 
@@ -33,16 +35,18 @@
 // Globals
 unsigned int SCR_WIDTH = 1280;
 unsigned int SCR_HEIGHT = 720;
-GLFWwindow *mainWindow = NULL;
+GLFWwindow* mainWindow = NULL;
 glm::mat4 projection, view, model;
-Shader * skyboxShader;
+Shader* skyboxShader;
 Shader* modelShader;
 Shader* cubeShader;
 Shader* linkShader;
+Shader* clawShader;
+Shader* textShader = NULL;
 
 // for arcball
 float arcballSpeed = 0.2f;
-static Arcball camArcBall(SCR_WIDTH, SCR_HEIGHT, arcballSpeed, true, true );
+static Arcball camArcBall(SCR_WIDTH, SCR_HEIGHT, arcballSpeed, true, true);
 static Arcball modelArcBall(SCR_WIDTH, SCR_HEIGHT, arcballSpeed, true, true);
 bool arcballCamRot = true;
 
@@ -53,32 +57,38 @@ glm::vec3 camTarget(0.0f, 0.0f, 0.0f);
 glm::vec3 camUp(0.0f, 1.0f, 0.0f);
 
 glm::vec3 modelPan(0.0f, 0.0f, 0.0f);
+bool isShowing = true;
+bool isZooming = false;
 
 
 
 // Function prototypes
 
 void framebuffer_size_callback(GLFWwindow* window, int width, int height);
-void key_callback(GLFWwindow *window, int key, int scancode, int action , int mods);
-void mouse_button_callback(GLFWwindow *window, int button, int action, int mods);
-void cursor_position_callback(GLFWwindow *window, double x, double y);
-void scroll_callback(GLFWwindow *window, double xoffset, double yoffset);
-GLFWwindow *glAllInit();
+void key_callback(GLFWwindow* window, int key, int scancode, int action, int mods);
+void mouse_button_callback(GLFWwindow* window, int button, int action, int mods);
+void cursor_position_callback(GLFWwindow* window, double x, double y);
+void scroll_callback(GLFWwindow* window, double xoffset, double yoffset);
+GLFWwindow* glAllInit();
 void render();
+void drawModels();
+
 
 void loadTexture();
+unsigned int loadTexture(char const* path, bool vflip);
 unsigned int loadCubemap(vector<std::string> faces);
 
 void initLinks();
 void drawLinks(Link* root, float t, glm::mat4 cmodel, Shader* shader);
+void drawRootFirst(Link* clink, float t, glm::mat4 cmodel, Shader* shader);
+
 
 // for texture
 unsigned int cubemapTexture;
 unsigned int texture;
 unsigned int texture2;
-
-// skybox
-SkyBox* skybox;
+unsigned int transparentTexture;
+unsigned int floorTexture;
 
 // model
 Model* buzz;
@@ -88,8 +98,15 @@ Model* potato;
 Model* wheezy;
 Model* rex;
 Cube* cube;
+Plane* plane;
 
-// for skybox
+// text
+Text* text = NULL;
+bool isTexting = false;
+string grabbingObject;
+
+// skybox
+SkyBox* skybox;
 vector<std::string> faces{
         "res/textures/right.jpg",
         "res/textures/left.jpg",
@@ -113,33 +130,38 @@ glm::vec3 lightPos(20.0f, 20.0f, 20.0f);
 glm::vec3 lightColor(1.0f, 1.0f, 1.0f);
 float ambientStrenth = 0.5f;
 
-int main( )
+int main()
 {
     mainWindow = glAllInit();
     skyboxShader = new Shader("res/shaders/skybox.vs", "res/shaders/skybox.frag");
     modelShader = new Shader("res/shaders/modelLoading.vs", "res/shaders/modelLoading.frag");
     cubeShader = new Shader("res/shaders/cube.vs", "res/shaders/cube.fs");
     linkShader = new Shader("res/shaders/basic_lighting(Link).vs", "res/shaders/basic_lighting(Link).fs");
+    clawShader = new Shader("res/shaders/clawShader.vs", "res/shaders/clawShader.fs");
+    textShader = new Shader("res/shaders/text.vs", "res/shaders/text.frag");
 
     // Projection initialization
     projection = glm::perspective(glm::radians(73.0f),
-                                  (float)SCR_WIDTH / (float)SCR_HEIGHT, 0.1f, 100.0f);
+        (float)SCR_WIDTH / (float)SCR_HEIGHT, 0.1f, 100.0f);
     skyboxShader->use();
     skyboxShader->setMat4("projection", projection);
     modelShader->use();
     modelShader->setMat4("projection", projection);
     cubeShader->use();
     cubeShader->setMat4("projection", projection);
+
     linkShader->use();
     linkShader->setMat4("projection", projection);
     linkShader->setVec3("lightColor", lightColor);
     linkShader->setVec3("lightPos", lightPos);
     linkShader->setFloat("ambientStrenth", ambientStrenth);
 
+    clawShader->use();
+    clawShader->setMat4("projection", projection);
 
     // Camera 위치
     cameraPos = cameraOrigPos;
-    
+
     // skybox init
     skybox = new SkyBox();
     cubemapTexture = loadCubemap(faces);
@@ -153,36 +175,164 @@ int main( )
     wheezy = new Model((GLchar*)"res/models/wheezy/wheezy.dae");
     rex = new Model((GLchar*)"res/models/rex/rex.obj");
 
-    cube = new Cube(-3.0f, 5.0f, 0.0f, 1.5);
+
+    cube = new Cube(-4.2f, 20.0f, 0.0f, 4.5f);
+    plane = new Plane(1.5f, 0.7f, 0.0f, 3.0f);
+    // for preventing flickering, discard very small edges in the texture
+    //plane->texCoords[0] = 0.1;
+    //plane->texCoords[1] = 0.9;
+    /*plane->texCoords[2] = 0.1;
+    plane->texCoords[3] = 0.1;
+    plane->texCoords[4] = 0.9;
+    plane->texCoords[5] = 0.1;*/
+    plane->texCoords[6] = 0.9;
+    plane->texCoords[7] = 0.9;
+    plane->updateVBO();
 
     // load cube texture
     loadTexture();
+    transparentTexture = loadTexture("res/textures/claw.png", true);
+    floorTexture = loadTexture("res/textures/metal.png", false);
+    //cubeShader->use();
+    //cubeShader->setInt("texture1", 0);
 
     // initialize animation data
     initLinks();
     timeT = 0.0f;
     renderMode = INIT;
 
+
+    // initialize text
+    text = new Text((char*)"fonts/arial.ttf", textShader, SCR_WIDTH, SCR_HEIGHT);
+
+
     // loop
-    while( !glfwWindowShouldClose( mainWindow ) )
+    while (!glfwWindowShouldClose(mainWindow))
     {
-        glfwPollEvents( );
-        
+        glfwPollEvents();
+
         render();
-        
-        glfwSwapBuffers( mainWindow );
+
+        glfwSwapBuffers(mainWindow);
     }
-    
-    glfwTerminate( );
+
+    glfwTerminate();
     return 0;
 }
 
+void drawModels() {
+    // draw buzz
+    modelShader->use();
+
+    model = glm::mat4(1.0f);
+    model = glm::scale(model, glm::vec3(0.15f, 0.15f, 0.15f));
+    model = glm::translate(model, glm::vec3(102.0f, -5.0f, -150.0f));
+    if (isZooming) {
+        model = glm::translate(model, glm::vec3(-100.0f, -15.0f, 150.0f));
+        model = glm::scale(model, glm::vec3(0.7f, 0.7f, 0.7f));
+
+        model = model * modelArcBall.createRotationMatrix();
+    }
+    model = glm::translate(model, modelPan);
+
+
+    model = glm::rotate(model, (float)5, glm::vec3(1.0f, 0.0f, 0.0f));
+    model = glm::rotate(model, (float)-0.25, glm::vec3(0.0f, 0.0f, 1.0f));
+
+    view = glm::lookAt(cameraPos, camTarget, camUp);
+    view = view * camArcBall.createRotationMatrix();
+
+    modelShader->setMat4("model", model);
+    modelShader->setMat4("view", view);
+    buzz->Draw(modelShader);
+
+
+
+    // draw woody
+    model = glm::mat4(1.0f);
+    model = glm::scale(model, glm::vec3(0.15f, 0.15f, 0.15f));
+    model = glm::translate(model, glm::vec3(-32.0f, -5.0f, -150.0f));
+    model = glm::translate(model, modelPan);
+
+
+    model = glm::rotate(model, (float)5, glm::vec3(1.0f, 0.0f, 0.0f));
+    model = glm::rotate(model, (float)-0.15, glm::vec3(0.0f, 0.0f, 1.0f));
+
+    //  model = model * modelArcBall.createRotationMatrix();
+    modelShader->setMat4("model", model);
+
+    woody->Draw(modelShader);
+
+
+
+    // draw mousy
+    model = glm::mat4(1.0f);
+    model = glm::scale(model, glm::vec3(0.06f, 0.06f, 0.06f));
+    model = glm::translate(model, glm::vec3(-70.0f, -250.0f, -300.0f));
+    model = glm::translate(model, modelPan);
+
+    //  model = model * modelArcBall.createRotationMatrix();
+
+
+    modelShader->setMat4("model", model);
+    mousy->Draw(modelShader);
+
+    // draw rex
+    model = glm::mat4(1.0f);
+    model = glm::scale(model, glm::vec3(0.035f, 0.035f, 0.035f));
+    model = glm::translate(model, glm::vec3(430.0f, 380.0f, -600.0f));
+
+    model = glm::rotate(model, (float)0.4, glm::vec3(1.0f, 0.0f, 0.0f));
+    model = glm::rotate(model, (float)-0.75, glm::vec3(0.0f, 1.0f, 0.0f));
+
+    model = glm::translate(model, modelPan);
+    //  model = model * modelArcBall.createRotationMatrix();
+
+    modelShader->setMat4("model", model);
+    rex->Draw(modelShader);
+
+
+
+
+
+    // draw wheezy
+    model = glm::mat4(1.0f);
+    model = glm::scale(model, glm::vec3(0.1f, 0.1f, 0.1f));
+    model = glm::translate(model, glm::vec3(125.0f, -115.0f, -150.0f));
+    model = glm::translate(model, modelPan);
+
+    model = glm::rotate(model, (float)4.7, glm::vec3(1.0f, 0.0f, 0.0f));
+    model = glm::rotate(model, (float)-0.15, glm::vec3(0.0f, 0.0f, 1.0f));
+    //  model = model * modelArcBall.createRotationMatrix();
+
+    modelShader->setMat4("model", model);
+    wheezy->Draw(modelShader);
+
+
+
+
+    // draw cube
+    model = glm::mat4(1.0f);
+    model = glm::translate(model, glm::vec3(0.0f, 0.0f, -30.0f));
+    //  model = model * modelArcBall.createRotationMatrix();
+    model = glm::translate(model, modelPan);
+
+    model = glm::rotate(model, (float)0.75, glm::vec3(1.0f, 0.0f, 0.0f));
+
+    cubeShader->use();
+    cubeShader->setMat4("model", model);
+    cubeShader->setMat4("view", view);
+    glBindTexture(GL_TEXTURE_2D, texture);
+
+    cube->draw(cubeShader);
+
+}
 
 void render()
 {
     //glClearColor(0.2f, 0.3f, 0.3f, 1.0f);
-    glClear( GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT );
-    
+    glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+
     if (renderMode == ANIM) {
         float cTime = (float)glfwGetTime(); // current time
         timeT = cTime - beginT;
@@ -192,84 +342,22 @@ void render()
     /*glm::mat4 view = glm::lookAt(cameraPos, glm::vec3(0.0f, 0.0f, 0.0f), glm::vec3(0.0f, 1.0f, 0.0f));
     view = view * camArcBall.createRotationMatrix();
     */
-    
-    // draw buzz
-    modelShader->use();
 
-    model = glm::mat4(1.0f);
-    model = glm::scale(model, glm::vec3(0.04f, 0.04f, 0.04f));
-    
-    model = glm::rotate(model, (float)5, glm::vec3(1.0f, 0.0f, 0.0f));
-    model = glm::rotate(model, (float) -0.25, glm::vec3(0.0f, 0.0f, 1.0f));
-    model = glm::translate(model, glm::vec3(100.0f, 0.0f, 0.0f));
-    model = glm::translate(model, modelPan);
-    model = model * modelArcBall.createRotationMatrix();
-    view = glm::lookAt(cameraPos, camTarget, camUp);
-    
-    modelShader->setMat4("model", model);
-    modelShader->setMat4("view", view);
-    buzz->Draw(modelShader);
-
-    // draw woody
-    model = glm::mat4(1.0f);
-    model = glm::scale(model, glm::vec3(0.04f, 0.04f, 0.04f));
-
-    model = glm::rotate(model, (float)5, glm::vec3(1.0f, 0.0f, 0.0f));
-    model = glm::rotate(model, (float)-0.15, glm::vec3(0.0f, 0.0f, 1.0f));
-    model = glm::translate(model, glm::vec3(-35.0f, -20.0f, 0.0f));
-    model = model * modelArcBall.createRotationMatrix();
-    modelShader->setMat4("model", model);
-    woody->Draw(modelShader);
+    drawModels();
 
 
+    // draw claw
+    //clawShader->use();
+    //glBindTexture(GL_TEXTURE_2D, transparentTexture);
+    //model = glm::mat4(1.0f);
+    //model = model * modelArcBall.createRotationMatrix();
+    //model = glm::translate(model, modelPan);
+    //model = glm::rotate(model, (float) glfwGetTime(), glm::vec3(0.0f, 0.0f, 1.0f));
 
-    // draw mousy
-    model = glm::mat4(1.0f);
-    model = glm::scale(model, glm::vec3(0.02f, 0.02f, 0.02f));
-    
-    model = glm::translate(model, modelPan);
-    model = model * modelArcBall.createRotationMatrix();
+    //clawShader->setMat4("view", view);
+    //clawShader->setMat4("model", model);
+    //plane->draw(clawShader);
 
-    model = glm::translate(model, glm::vec3(-75.0f, -230.0f, 0.0f));
-
-    modelShader->setMat4("model", model);
-    mousy->Draw(modelShader);
-
-
-    // draw wheezy
-    model = glm::mat4(1.0f);
-    model = glm::scale(model, glm::vec3(0.04f, 0.04f, 0.04f));
-    model = glm::translate(model, glm::vec3(115.0f, -100.0f, 0));
-
-    model = glm::rotate(model, (float)4.7, glm::vec3(1.0f, 0.0f, 0.0f));
-    model = glm::rotate(model, (float)-0.15, glm::vec3(0.0f, 0.0f, 1.0f));
-
-
-    //model = glm::translate(model, glm::vec3(100.0f, 0.0f, -90.0f));
-
-    model = glm::translate(model, modelPan);
-    model = model * modelArcBall.createRotationMatrix();
-
-
-    modelShader->setMat4("model", model);
-    wheezy->Draw(modelShader);
-
-    // draw rex
-    model = glm::mat4(1.0f);
-    model = glm::scale(model, glm::vec3(0.01f, 0.01f, 0.01f));
-    model = glm::translate(model, glm::vec3(430.0f, 410.0, 0.0f));
-
-    //model = glm::rotate(model, (float)4.7, glm::vec3(1.0f, 0.0f, 0.0f));
-    model = glm::rotate(model, (float)0.4, glm::vec3(1.0f, 0.0f, 0.0f));
-    model = glm::rotate(model, (float)-0.75, glm::vec3(0.0f, 1.0f, 0.0f));
-
-    //model = glm::translate(model, glm::vec3(400.0f, 0.0, 0.0f));
-
-    model = glm::translate(model, modelPan);
-    model = model * modelArcBall.createRotationMatrix();
-
-    modelShader->setMat4("model", model);
-    rex->Draw(modelShader);
 
 
     // Robot arms with Animation 구현.
@@ -277,18 +365,31 @@ void render()
     linkShader->use();
     linkShader->setMat4("view", view);
     model = glm::mat4(1.0f);
-    model = modelArcBall.createRotationMatrix();
+
+    // model = modelArcBall.createRotationMatrix();
+
+    drawRootFirst(root, timeT / animEndTime, model, linkShader);
+
+    model = glm::mat4(1.0f);
     drawLinks(root, timeT / animEndTime, model, linkShader);
 
-    // draw cube
-    model = glm::mat4(1.0f);
-    model = modelArcBall.createRotationMatrix();
-    cubeShader->use();
-    cubeShader->setMat4("model", model);
-    cubeShader->setMat4("view", view);
-    glBindTexture(GL_TEXTURE_2D, texture);
 
-    cube->draw(cubeShader);
+    if (isZooming) {
+        // drawing a floor
+        glBindTexture(GL_TEXTURE_2D, floorTexture);
+
+        model = glm::mat4(1.0);
+        model = glm::translate(model, modelPan);
+        model = glm::translate(model, glm::vec3(-18.0f, -7.0f, -4.5f));
+        model = glm::scale(model, glm::vec3(13.0f, 8.0f, 0.0f));
+
+        view = glm::lookAt(cameraPos, camTarget, camUp);
+        clawShader->setMat4("view", view);
+        clawShader->setMat4("model", model);
+        plane->draw(clawShader);
+    }
+
+
 
 
 
@@ -302,6 +403,12 @@ void render()
     glDepthFunc(GL_LEQUAL);
     skybox->draw(skyboxShader, cubemapTexture);
     glDepthFunc(GL_LESS);
+
+    if (isTexting) {
+        // Drawing texts
+        text->RenderText("You got " + grabbingObject + "!", 520.0f, 53.0f, 1.0f, glm::vec3(0.5, 0.8f, 0.2f));
+    }
+
 }
 
 unsigned int loadCubemap(vector<std::string> faces)
@@ -371,6 +478,48 @@ void loadTexture() {
 
 }
 
+unsigned int loadTexture(char const* path, bool vflip)
+{
+    unsigned int textureID;
+    glGenTextures(1, &textureID);
+
+    if (vflip) stbi_set_flip_vertically_on_load(true);
+
+    int width, height, nrComponents;
+    unsigned char* data = stbi_load(path, &width, &height, &nrComponents, 0);
+    if (data)
+    {
+        GLenum format;
+        if (nrComponents == 1)
+            format = GL_RED;
+        else if (nrComponents == 3)
+            format = GL_RGB;
+        else if (nrComponents == 4)
+            format = GL_RGBA;
+        else {
+            format = GL_RGBA;
+        }
+
+        glBindTexture(GL_TEXTURE_2D, textureID);
+        glTexImage2D(GL_TEXTURE_2D, 0, format, width, height, 0, format, GL_UNSIGNED_BYTE, data);
+        glGenerateMipmap(GL_TEXTURE_2D);
+
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_REPEAT);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_REPEAT);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR_MIPMAP_LINEAR);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+
+        stbi_image_free(data);
+    }
+    else
+    {
+        std::cout << "Texture failed to load at path: " << path << std::endl;
+        stbi_image_free(data);
+    }
+
+    return textureID;
+}
+
 
 void initLinks()
 {
@@ -384,34 +533,105 @@ void initLinks()
 
     // root link: yellow
     root = new Link("ROOT", glm::vec3(1.0, 1.0, 0.0), true, 1,
-        glm::vec3(1.0, 5.0, 1.0),   // size
+        glm::vec3(0.5, 3.0, 0.5),   // size
         glm::vec3(0.0, 0.0, 0.0),   // offset
-        glm::vec3(-4.0, -2.0, 0.0),   // trans1 w.r.t. origin (because root)
-        glm::vec3(0.0, 0.0, 0.0),   // trans2 w.r.t. origin (because root)
+        glm::vec3(-6.0, -4.5, -5.0),   // trans1 w.r.t. origin (because root)
+        glm::vec3(-6.0, 0.0, -4.0),   // trans2 w.r.t. origin (because root)
         glm::vec3(0.0, 0.0, 0.0),   // no rotation
         glm::vec3(0.0, 0.0, 0.0));  // no rotation
 
 // left upper arm: red
     root->child[0] = new Link("LEFT_ARM_UPPER", glm::vec3(1.0, 0.0, 0.0), false, 1,
-        glm::vec3(4.0, 1.0, 1.0),  // size
-        glm::vec3(2.0, 0.0, 0.0),  // offset
-        glm::vec3(0.0, 2.5, 0.0),  // trans1
-        glm::vec3(0.0, 2.5, 0.0),  // trans2
+        glm::vec3(3.0, 0.5, 0.5),  // size
+        glm::vec3(1.5, 0.0, 0.0),  // offset
+        glm::vec3(0.0, 1.75, 0.0),  // trans1
+        glm::vec3(0.0, 1.5, 0.0),  // trans2
         glm::vec3(0.0, 0.0, 0.0),  // rotation about parent
         glm::vec3(0.0, 0.0, 60.0));
 
     // left low arm: orange
-    root->child[0]->child[0] = new Link("LEFT_ARM_LOWER", glm::vec3(1.0, 0.5, 0.0), false, 0,
-        glm::vec3(2.0, 1.0, 1.0),  // size
-        glm::vec3(1.0, 0.0, 0.0),  // offset
-        glm::vec3(4.0, 0.0, 0.0),
-        glm::vec3(4.0, 0.0, 0.0),
+    //root->child[0]->child[0] = new Link("LEFT_ARM_LOWER", glm::vec3(1.0, 0.5, 0.0), false, 0,
+    //    glm::vec3(3.0, 0.5, 0.5),  // size
+    //    glm::vec3(1.5, 0.0, 0.0),  // offset
+    //    glm::vec3(3.0, 0.0, 0.0),
+    //    glm::vec3(3.0, 0.0, 0.0),
+    //    glm::vec3(0.0, 0.0, -30.0),
+    //    glm::vec3(0.0, 0.0, 0.0));
+
+    // => 이거 수정: 즉, .. 멀리 있는 렉스, 우즈, Wheezy한테 갈 때는,
+    // 주황색의 X를 몇배 늘리는 느낌으로?
+
+    // 그 다음... 노랑이를 먼저 Y축으로 움직이고 하는 건 How?
+    // => 흠 이건 다시 생각. 잠깐 생각해보면 draw를 무조건 root가 끝나면 실행하도록 하는 방법.
+    // ===>>>>>>>>>>>>>>>>>>> 아니 걍 전체 다 Y축으로 위 아래만 가도록 drawLink 새롭게 하면 되겠네.
+    // 
+    // => 글고 마지막으로, 원래 있던 곳으로 유지하고,
+    // 눌렀을 때 가는 느낌으로 하는 건 How? => 
+
+    root->child[0]->child[0] = new Link("LEFT_ARM_LOWER", glm::vec3(1.0, 0.5, 0.0), false, 1,
+        glm::vec3(3.0, 0.5, 0.5),  // size
+        glm::vec3(1.5, 0.0, 0.0),  // offset
+        glm::vec3(3.0, 0.0, 0.0),
+        glm::vec3(3.0, 0.0, 0.0),
+        glm::vec3(0.0, 0.0, -30.0),
+        glm::vec3(0.0, 0.0, 0.0));
+
+    root->child[0]->child[0]->child[0] = new Link("CLAW", glm::vec3(1.0, 0.5, 0.05), false, 0,
+        glm::vec3(1.0, 0.5, 0.5),  // size
+        glm::vec3(0.5, 0.0, 0.0),  // offset
+        glm::vec3(3.0, -0.75, 0.0),
+        glm::vec3(3.0, -0.75, 0.0),
         glm::vec3(0.0, 0.0, 0.0),
-        glm::vec3(0.0, -30.0, -50.0));
+        glm::vec3(0.0, 0.0, 0.0));
+
+}
+
+void drawRootFirst(Link* clink, float t, glm::mat4 cmodel, Shader* shader) {
+    if (clink->name == "CLAW") {
+        // texture할 수 있는 clawShader로 바꾼다.
+        shader = clawShader;
+    }
+    if (t > 1.0) t = 1.0f;
+
+    glm::mat4 thisMat = glm::mat4(1.0f);
+
+    // accumulate the parent's transformation
+    thisMat = thisMat * cmodel;
+
+    // if root, interpolates the translation
+    glm::vec3 ctrans = glm::mix(clink->trans1, clink->trans2, t);
+    thisMat = glm::translate(thisMat, ctrans);
+
+    if (clink->name == "ROOT")
+        thisMat = glm::translate(thisMat, glm::vec3(0.0f, 4.0f, 0.0f));
+
+
+    // render the link
+    shader->use();
+    shader->setMat4("model", thisMat);
+    if (shader == clawShader) {
+        shader->setMat4("view", view);
+        glBindTexture(GL_TEXTURE_2D, transparentTexture);
+        plane->draw(shader);
+    }
+    else
+        clink->draw(shader);
+
+    // recursively call the drawLinks for the children
+    for (int i = 0; i < clink->nChild; i++) {
+        drawRootFirst(clink->child[i], t, thisMat, shader);
+    }
+
+
 }
 
 void drawLinks(Link* clink, float t, glm::mat4 cmodel, Shader* shader)
 {
+    // cLink의 name으로 판단.
+    if (clink->name == "CLAW") {
+        // texture할 수 있는 clawShader로 바꾼다.
+        shader = clawShader;
+    }
 
     if (t > 1.0) t = 1.0f;
 
@@ -436,7 +656,16 @@ void drawLinks(Link* clink, float t, glm::mat4 cmodel, Shader* shader)
     // render the link
     shader->use();
     shader->setMat4("model", thisMat);
-    clink->draw(shader);
+
+    if (shader == clawShader) {
+        shader->setMat4("view", view);
+        glBindTexture(GL_TEXTURE_2D, transparentTexture);
+        plane->draw(shader);
+    }
+    else
+        clink->draw(shader);
+
+
 
     // recursively call the drawLinks for the children
     for (int i = 0; i < clink->nChild; i++) {
@@ -445,52 +674,56 @@ void drawLinks(Link* clink, float t, glm::mat4 cmodel, Shader* shader)
 
 }
 
-GLFWwindow *glAllInit()
+GLFWwindow* glAllInit()
 {
     // Init GLFW
-    glfwInit( );
+    glfwInit();
     // Set all the required options for GLFW
-    glfwWindowHint( GLFW_CONTEXT_VERSION_MAJOR, 3 );
-    glfwWindowHint( GLFW_CONTEXT_VERSION_MINOR, 3 );
-    glfwWindowHint( GLFW_OPENGL_PROFILE, GLFW_OPENGL_CORE_PROFILE );
-    glfwWindowHint( GLFW_OPENGL_FORWARD_COMPAT, GL_TRUE );
-    glfwWindowHint( GLFW_RESIZABLE, GL_FALSE );
-    
+    glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 3);
+    glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 3);
+    glfwWindowHint(GLFW_OPENGL_PROFILE, GLFW_OPENGL_CORE_PROFILE);
+    glfwWindowHint(GLFW_OPENGL_FORWARD_COMPAT, GL_TRUE);
+    glfwWindowHint(GLFW_RESIZABLE, GL_FALSE);
+
     // Create a GLFWwindow object that we can use for GLFW's functions
-    GLFWwindow *window = glfwCreateWindow( SCR_WIDTH, SCR_HEIGHT, "Term Project", nullptr, nullptr );
-    
+    GLFWwindow* window = glfwCreateWindow(SCR_WIDTH, SCR_HEIGHT, "Term Project", nullptr, nullptr);
+
     if (window == nullptr)
     {
         std::cout << "Failed to create GLFW window" << std::endl;
-        glfwTerminate( );
+        glfwTerminate();
         exit(-1);
     }
-    
-    glfwMakeContextCurrent( window );
-    
+
+    glfwMakeContextCurrent(window);
+
     // Set the required callback functions
     glfwSetFramebufferSizeCallback(window, framebuffer_size_callback);
     glfwSetKeyCallback(window, key_callback);
     glfwSetMouseButtonCallback(window, mouse_button_callback);
     glfwSetCursorPosCallback(window, cursor_position_callback);
     glfwSetScrollCallback(window, scroll_callback);
-    
+
     // Set this to true so GLEW knows to use a modern approach to retrieving function pointers and extensions
     glewExperimental = GL_TRUE;
     // Initialize GLEW to setup the OpenGL Function pointers
-    if ( GLEW_OK != glewInit( ) )
+    if (GLEW_OK != glewInit())
     {
         std::cout << "Failed to initialize GLEW" << std::endl;
         exit(-1);
     }
-    
+
     // Define the viewport dimensions
-    glViewport( 0, 0, SCR_WIDTH, SCR_HEIGHT );
-    
+    glViewport(0, 0, SCR_WIDTH, SCR_HEIGHT);
+
     // OpenGL options
-    glClearColor( 0.05f, 0.05f, 0.05f, 1.0f );
-    glEnable( GL_DEPTH_TEST );
-    
+    glClearColor(0.05f, 0.05f, 0.05f, 1.0f);
+    glEnable(GL_DEPTH_TEST);
+
+    glEnable(GL_CULL_FACE);
+    glEnable(GL_BLEND);
+    glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+
     return(window);
 }
 
@@ -502,7 +735,7 @@ void framebuffer_size_callback(GLFWwindow* window, int width, int height)
     SCR_WIDTH = width;
     SCR_HEIGHT = height;
     projection = glm::perspective(glm::radians(73.0f),
-                                  (float)SCR_WIDTH / (float)SCR_HEIGHT, 0.1f, 100.0f);
+        (float)SCR_WIDTH / (float)SCR_HEIGHT, 0.1f, 100.0f);
     modelShader->use();
     modelShader->setMat4("projection", projection);
     skyboxShader->use();
@@ -511,10 +744,12 @@ void framebuffer_size_callback(GLFWwindow* window, int width, int height)
     linkShader->setMat4("projection", projection);
     cubeShader->use();
     cubeShader->setMat4("projection", projection);
+    clawShader->use();
+    clawShader->setMat4("projection", projection);
 
 }
 
-void key_callback(GLFWwindow *window, int key, int scancode, int action, int mods) {
+void key_callback(GLFWwindow* window, int key, int scancode, int action, int mods) {
     if (key == GLFW_KEY_ESCAPE && action == GLFW_PRESS) {
         glfwSetWindowShouldClose(window, true);
     }
@@ -555,22 +790,65 @@ void key_callback(GLFWwindow *window, int key, int scancode, int action, int mod
             timeT = 0.0f;
         }
     }
+    else if (key == GLFW_KEY_0 && action == GLFW_PRESS) {
+        isTexting = false;
+    }
+    else if (GLFW_KEY_1 <= key && key <= GLFW_KEY_6 && action == GLFW_PRESS) {
+        if (!isTexting)
+            isTexting = true;
+
+        switch (key)
+        {
+        case GLFW_KEY_1:
+            grabbingObject = "Cube";
+            break;
+        case GLFW_KEY_2:
+            grabbingObject = "Rex";
+            break;
+        case GLFW_KEY_3:
+            grabbingObject = "Woody";
+            break;
+        case GLFW_KEY_4:
+            grabbingObject = "Buzz";
+            break;
+        case GLFW_KEY_5:
+            grabbingObject = "Mousy";
+            break;
+        case GLFW_KEY_6:
+            grabbingObject = "Wheezy";
+            break;
+        default:
+            break;
+        }
+
+    }
+    else if (key == GLFW_KEY_Q && action == GLFW_PRESS) {
+        /*if (isShowing) {
+            modelPan[0] += 1000.0f;
+        }
+        else
+            modelPan[0] -= 1000.0f;*/
+
+        isShowing = !isShowing;
+        isZooming = !isZooming;
+    }
+
 }
 
-void mouse_button_callback(GLFWwindow *window, int button, int action, int mods) {
+void mouse_button_callback(GLFWwindow* window, int button, int action, int mods) {
     if (arcballCamRot)
-        camArcBall.mouseButtonCallback( window, button, action, mods );
+        camArcBall.mouseButtonCallback(window, button, action, mods);
     else
-        modelArcBall.mouseButtonCallback( window, button, action, mods );
+        modelArcBall.mouseButtonCallback(window, button, action, mods);
 }
 
-void cursor_position_callback(GLFWwindow *window, double x, double y) {
+void cursor_position_callback(GLFWwindow* window, double x, double y) {
     if (arcballCamRot)
-        camArcBall.cursorCallback( window, x, y );
+        camArcBall.cursorCallback(window, x, y);
     else
-        modelArcBall.cursorCallback( window, x, y );
+        modelArcBall.cursorCallback(window, x, y);
 }
 
-void scroll_callback(GLFWwindow *window, double xoffset, double yoffset) {
+void scroll_callback(GLFWwindow* window, double xoffset, double yoffset) {
     cameraPos[2] -= (yoffset * 0.5);
 }
