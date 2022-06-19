@@ -33,17 +33,19 @@ public:
     glm::vec3 offset;     // translational offset
     glm::vec3 trans1;     // begin translation vector (in terms of the parent's local origin)
     glm::vec3 trans2;     // end translation vector (in terms of the parent's local origin)
+    glm::vec3 trans3;
     glm::vec3 rot1;       // starting angles (x, y, z) of joint rotation (in radians)
-    glm::vec3 rot2;       // ending angles (x, y, z) of joint rotation (in radians)
+    glm::vec3 rot2;       
+    glm::vec3 rot3;       // ending angles (x, y, z) of joint rotation (in radians)
     glm::quat q1;         // starting quaternion converted from rot1
     glm::quat q2;         // ending quaternion converted from rot2
     Cube *cube;           // cube object for this link
-    Plane* plane;         // 내 수정 => plane이 될 수도 있다.
+    Plane* plane;         // plane이 될 수도 있다.
     
     Link(string name, glm::vec3 color, bool isRoot, int nChild,
          glm::vec3 size, glm::vec3 offset,
-         glm::vec3 trans1, glm::vec3 trans2,
-         glm::vec3 rot1, glm::vec3 rot2) {     // angles in degree
+         glm::vec3 trans1, glm::vec3 trans2, glm::vec3 trans3,
+         glm::vec3 rot1, glm::vec3 rot2, glm::vec3 rot3) {     // angles in degree
         this->name = name;
         this->color = color;
         this->isRoot = isRoot;
@@ -54,8 +56,10 @@ public:
         this->offset = offset;
         this->trans1 = trans1;
         this->trans2 = trans2;
+        this->trans3 = trans3;
         this->rot1 = glm::radians(rot1);
         this->rot2 = glm::radians(rot2);
+        this->rot3 = glm::radians(rot3);
         this->q1 = glm::quat(rot1);
         this->q2 = glm::quat(rot2);
         //this->cube = new Cube(size[0], size[1], size[2]);

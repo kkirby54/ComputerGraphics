@@ -34,9 +34,9 @@
 // Globals
 unsigned int SCR_WIDTH = 1280;
 unsigned int SCR_HEIGHT = 720;
-GLFWwindow* mainWindow = NULL;
+GLFWwindow *mainWindow = NULL;
 glm::mat4 projection, view, model;
-Shader* skyboxShader;
+Shader * skyboxShader;
 Shader* modelShader;
 Shader* modelZoomingShader;
 Shader* cubeShader;
@@ -65,11 +65,11 @@ bool isSelecting;
 // Function prototypes
 
 void framebuffer_size_callback(GLFWwindow* window, int width, int height);
-void key_callback(GLFWwindow* window, int key, int scancode, int action, int mods);
-void mouse_button_callback(GLFWwindow* window, int button, int action, int mods);
-void cursor_position_callback(GLFWwindow* window, double x, double y);
-void scroll_callback(GLFWwindow* window, double xoffset, double yoffset);
-GLFWwindow* glAllInit();
+void key_callback(GLFWwindow *window, int key, int scancode, int action , int mods);
+void mouse_button_callback(GLFWwindow *window, int button, int action, int mods);
+void cursor_position_callback(GLFWwindow *window, double x, double y);
+void scroll_callback(GLFWwindow *window, double xoffset, double yoffset);
+GLFWwindow *glAllInit();
 void render();
 void drawModels();
 
@@ -93,7 +93,7 @@ unsigned int floorTexture;
 Model* buzz;
 Model* woody;
 Model* mousy;
-Model* potato;
+
 Model* wheezy;
 Model* rex;
 Cube* cube;
@@ -122,7 +122,7 @@ RenderMode renderMode;                  // current rendering mode
 float beginT;                           // animation beginning time (in sec)
 float timeT;                            // current time (in sec)
 const float animEndTime = 2.0f;         // ending time of animation (in sec)
-Link* root, * root2;
+Link* root, *root2;
 int targetKey;                          // 눌려진 key
 
 // for lighting
@@ -131,7 +131,7 @@ glm::vec3 lightPos(10.0f, 10.0f, 10.0f);
 glm::vec3 lightColor(1.0f, 1.0f, 1.0f);
 float ambientStrength = 0.1f;
 
-int main()
+int main( )
 {
     mainWindow = glAllInit();
     skyboxShader = new Shader("res/shaders/skybox.vs", "res/shaders/skybox.frag");
@@ -144,7 +144,7 @@ int main()
 
     // Projection initialization
     projection = glm::perspective(glm::radians(73.0f),
-        (float)SCR_WIDTH / (float)SCR_HEIGHT, 0.1f, 100.0f);
+                                  (float)SCR_WIDTH / (float)SCR_HEIGHT, 0.1f, 100.0f);
     skyboxShader->use();
     skyboxShader->setMat4("projection", projection);
     modelShader->use();
@@ -159,13 +159,13 @@ int main()
     linkShader->setVec3("lightColor", lightColor);
     linkShader->setVec3("lightPos", lightPos);
     linkShader->setFloat("ambientStrength", ambientStrength);
-
+    
     clawShader->use();
     clawShader->setMat4("projection", projection);
 
     // Camera 위치
     cameraPos = cameraOrigPos;
-
+    
     // skybox init
     skybox = new SkyBox();
     cubemapTexture = loadCubemap(faces);
@@ -198,21 +198,21 @@ int main()
     timeT = 0.0f;
     renderMode = INIT;
 
-
+    
     // initialize text
     text = new Text((char*)"fonts/arial.ttf", textShader, SCR_WIDTH, SCR_HEIGHT);
 
     // loop
-    while (!glfwWindowShouldClose(mainWindow))
+    while( !glfwWindowShouldClose( mainWindow ) )
     {
-        glfwPollEvents();
-
+        glfwPollEvents( );
+        
         render();
-
-        glfwSwapBuffers(mainWindow);
+        
+        glfwSwapBuffers( mainWindow );
     }
-
-    glfwTerminate();
+    
+    glfwTerminate( );
     return 0;
 }
 
@@ -244,7 +244,7 @@ void drawModels() {
     modelZoomingShader->setVec3("viewPos", cameraPos);
 
     // light properties
-    modelZoomingShader->setVec3("light.ambient", 0.2f, 0.2f, 0.2f);
+    modelZoomingShader->setVec3("light.ambient", 0.4f, 0.4f, 0.4f);
     modelZoomingShader->setVec3("light.diffuse", 0.7f, 0.7f, 0.7f);
     modelZoomingShader->setVec3("light.specular", 1.0f, 1.0f, 1.0f);
 
@@ -385,7 +385,7 @@ void drawModels() {
 
     // draw cube
     model = glm::mat4(1.0f);
-
+    
     model = glm::scale(model, glm::vec3(4.5f, 4.5f, 4.5f));
     model = glm::translate(model, glm::vec3(-2.5f, 4.0f, -5.0f));
     if (isZooming[1]) {
@@ -425,8 +425,8 @@ void drawModels() {
 void render()
 {
     //glClearColor(0.2f, 0.3f, 0.3f, 1.0f);
-    glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
-
+    glClear( GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT );
+    
     isAnimEnd = false;
     if (renderMode == ANIM) {
         float cTime = (float)glfwGetTime(); // current time
@@ -442,11 +442,11 @@ void render()
     linkShader->use();
     linkShader->setMat4("view", view);
     model = glm::mat4(1.0f);
-
+    
     if (targetKey % 2 == 0)
         timeT = 0;
     drawLinks(root, timeT / animEndTime, model, linkShader);
-
+    
 
 
     // draw Link2
@@ -514,8 +514,8 @@ void render()
         }
     }
 
-    if (isAllCollected && !hasZoomingObj)
-        text->RenderText("you have collected All toys!", 430.0f, 300.0f, 0.8f, glm::vec3(0.3, 0.7f, 0.9f));
+     if (isAllCollected && !hasZoomingObj)
+         text->RenderText("you have collected All toys!", 430.0f, 300.0f, 0.8f, glm::vec3(0.3, 0.7f, 0.9f));
 
 }
 
@@ -851,51 +851,51 @@ void drawLinks(Link* clink, float t, glm::mat4 cmodel, Shader* shader)
 
 }
 
-GLFWwindow* glAllInit()
+GLFWwindow *glAllInit()
 {
     // Init GLFW
-    glfwInit();
+    glfwInit( );
     // Set all the required options for GLFW
-    glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 3);
-    glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 3);
-    glfwWindowHint(GLFW_OPENGL_PROFILE, GLFW_OPENGL_CORE_PROFILE);
-    glfwWindowHint(GLFW_OPENGL_FORWARD_COMPAT, GL_TRUE);
-    glfwWindowHint(GLFW_RESIZABLE, GL_FALSE);
-
+    glfwWindowHint( GLFW_CONTEXT_VERSION_MAJOR, 3 );
+    glfwWindowHint( GLFW_CONTEXT_VERSION_MINOR, 3 );
+    glfwWindowHint( GLFW_OPENGL_PROFILE, GLFW_OPENGL_CORE_PROFILE );
+    glfwWindowHint( GLFW_OPENGL_FORWARD_COMPAT, GL_TRUE );
+    glfwWindowHint( GLFW_RESIZABLE, GL_FALSE );
+    
     // Create a GLFWwindow object that we can use for GLFW's functions
-    GLFWwindow* window = glfwCreateWindow(SCR_WIDTH, SCR_HEIGHT, "Term Project", nullptr, nullptr);
-
+    GLFWwindow *window = glfwCreateWindow( SCR_WIDTH, SCR_HEIGHT, "Term Project", nullptr, nullptr );
+    
     if (window == nullptr)
     {
         std::cout << "Failed to create GLFW window" << std::endl;
-        glfwTerminate();
+        glfwTerminate( );
         exit(-1);
     }
-
-    glfwMakeContextCurrent(window);
-
+    
+    glfwMakeContextCurrent( window );
+    
     // Set the required callback functions
     glfwSetFramebufferSizeCallback(window, framebuffer_size_callback);
     glfwSetKeyCallback(window, key_callback);
     glfwSetMouseButtonCallback(window, mouse_button_callback);
     glfwSetCursorPosCallback(window, cursor_position_callback);
     glfwSetScrollCallback(window, scroll_callback);
-
+    
     // Set this to true so GLEW knows to use a modern approach to retrieving function pointers and extensions
     glewExperimental = GL_TRUE;
     // Initialize GLEW to setup the OpenGL Function pointers
-    if (GLEW_OK != glewInit())
+    if ( GLEW_OK != glewInit( ) )
     {
         std::cout << "Failed to initialize GLEW" << std::endl;
         exit(-1);
     }
-
+    
     // Define the viewport dimensions
-    glViewport(0, 0, SCR_WIDTH, SCR_HEIGHT);
-
+    glViewport( 0, 0, SCR_WIDTH, SCR_HEIGHT );
+    
     // OpenGL options
-    glClearColor(0.05f, 0.05f, 0.05f, 1.0f);
-    glEnable(GL_DEPTH_TEST);
+    glClearColor( 0.05f, 0.05f, 0.05f, 1.0f );
+    glEnable( GL_DEPTH_TEST );
 
     glEnable(GL_CULL_FACE);
     glEnable(GL_BLEND);
@@ -912,7 +912,7 @@ void framebuffer_size_callback(GLFWwindow* window, int width, int height)
     SCR_WIDTH = width;
     SCR_HEIGHT = height;
     projection = glm::perspective(glm::radians(73.0f),
-        (float)SCR_WIDTH / (float)SCR_HEIGHT, 0.1f, 100.0f);
+                                  (float)SCR_WIDTH / (float)SCR_HEIGHT, 0.1f, 100.0f);
     modelShader->use();
     modelShader->setMat4("projection", projection);
     modelZoomingShader->use();
@@ -928,7 +928,7 @@ void framebuffer_size_callback(GLFWwindow* window, int width, int height)
 
 }
 
-void key_callback(GLFWwindow* window, int key, int scancode, int action, int mods) {
+void key_callback(GLFWwindow *window, int key, int scancode, int action, int mods) {
     if (key == GLFW_KEY_ESCAPE && action == GLFW_PRESS) {
         glfwSetWindowShouldClose(window, true);
     }
@@ -949,7 +949,7 @@ void key_callback(GLFWwindow* window, int key, int scancode, int action, int mod
         initLinks();
         timeT = 0.0f;
         renderMode = INIT;
-
+        
 
     }
     else if (key == GLFW_KEY_I && action == GLFW_PRESS) {
@@ -1092,26 +1092,26 @@ void key_callback(GLFWwindow* window, int key, int scancode, int action, int mod
                 root2->trans1 = glm::vec3(12.5, -6.0, -5.0);   // trans1 w.r.t. origin (because root)
                 root2->trans2 = glm::vec3(12.5, -6.0, -5.0);   // trans2 w.r.t. origin (because root)
                 root2->trans3 = glm::vec3(12.5, -6.0, -5.0);   // trans3 w.r.t. origin (because root)
-
+                
                 root2->child[0]->rot3 = glm::radians(glm::vec3(0.0, 0.0, -20.0));
                 break;
             default:
                 break;
             }
         }
-
+        
     }
 
 }
 
-void mouse_button_callback(GLFWwindow* window, int button, int action, int mods) {
-    modelArcBall.mouseButtonCallback(window, button, action, mods);
+void mouse_button_callback(GLFWwindow *window, int button, int action, int mods) {
+    modelArcBall.mouseButtonCallback( window, button, action, mods );
 }
 
-void cursor_position_callback(GLFWwindow* window, double x, double y) {
-    modelArcBall.cursorCallback(window, x, y);
+void cursor_position_callback(GLFWwindow *window, double x, double y) {
+    modelArcBall.cursorCallback( window, x, y );
 }
 
-void scroll_callback(GLFWwindow* window, double xoffset, double yoffset) {
+void scroll_callback(GLFWwindow *window, double xoffset, double yoffset) {
     cameraPos[2] -= (yoffset * 0.5);
 }
